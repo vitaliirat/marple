@@ -6,7 +6,7 @@ from mock import Mock
 import re
 import os
 from typing import List
-from argparse import ArgumentParser as Arguments, RawDescriptionHelpFormatter
+from argparse import ArgumentParser, RawDescriptionHelpFormatter
 import urllib.parse
 
 import aiohttp
@@ -19,7 +19,7 @@ from termcolor import colored
 import yandex_search
 from PyPDF2 import PdfFileReader
 from search_engines import Aol, Ask, Qwant, Bing, Yahoo, Startpage, Dogpile, Mojeek, Torch, Duckduckgo
-from serpapi import GoogleSearch as SerpGoogle, BaiduSearch as SerpBaidu
+from serpapi import GoogleSearch as SerpGoogle
 
 username_marks_symbols = '/.~=?&      -'
 
@@ -32,7 +32,6 @@ junk_end_symbols = '?&/'
 
 links_blacklist = [
     'books.google.ru',
-    '/search?q=',
 ]
 
 
@@ -111,7 +110,7 @@ def merge_links(links: List[Link], name: str, filter_by_urls: bool = True) -> Li
 
     if filter_by_urls:
         for l in links:
-            if name.lower() not in l.url.lower():
+            if name not in l.url.lower():
                 l.filtered = True
 
     links = list(filter(blacklist_filter, links))
@@ -153,11 +152,8 @@ class Parser:
 
     async def run(self, storage, username, count=100, lang='en', proxy=None):
         url = self.make_url(username, count, lang)
-        try:
-            html = await self.request(url)
-            results = await self.parse(html, username)
-        except Exception as e:
-            return (self.name, f'Error of type "{type(e)}": {e}')
+        html = await self.request(url)
+        results = await self.parse(html, username)
 
         if not results:
             return (self.name, f'Got no results')
@@ -178,8 +174,6 @@ class YandexParser:
         try:
             yandex = yandex_search.Yandex()
             results = yandex.search(username).items
-        except KeyError as e:
-            return (self.name, f'Not found env variable {str(e)}')
         except Exception as e:
             return (self.name, str(e))
 
@@ -216,7 +210,7 @@ class GoogleParser(Parser):
 
 
 # old unused parser
-class DuckParserOld(Parser):
+class DuckParser(Parser):
     name = 'DuckDuckGo scraping'
 
     def make_url(self, username, count, lang):
@@ -333,7 +327,6 @@ class DuckduckgoParser(PaginatedParser):
     base_class = Duckduckgo
 
 
-# TODO: pagination
 class NaverParser:
     name = 'Naver parser (SerpApi)'
 
@@ -354,51 +347,8 @@ class NaverParser:
             search = SerpGoogle(params)
             results = search.get_dict()
             organic_results = results['organic_results']
-        except KeyError as e:
-            return (self.name, f'Not found env variable {str(e)}')
         except Exception as e:
             return (self.name, str(e))
-
-        tuples_list = [Link(r["link"], r["title"], username, source='Naver') for r in organic_results]
-
-        storage += tuples_list
-
-
-# TODO: pagination
-class BaiduParser:
-    name = 'Baidu parser (SerpApi)'
-
-    """
-        You should have env variables with key, e.g.
-
-        export SERPAPI_KEY=key
-    """
-    async def run(self, storage, username, count=100, lang='en', proxy=None):
-        params = {
-          "engine": "baidu",
-          "q": username,
-          "api_key": os.getenv('SERPAPI_KEY')
-        }
-
-        try:
-            search = SerpBaidu(params)
-            results = search.get_dict()
-            organic_results = results['organic_results']
-        except KeyError as e:
-            return (self.name, f'Not found env variable {str(e)}')
-        except Exception as e:
-            return (self.name, str(e))
-
-        session = await create_async_session(proxy)
-
-        async def baidu_resolve(res):
-            resp = await session.request('GET', res['link'], allow_redirects=False)
-            location = resp.headers.get('location')
-            res['link'] = location
-
-        coros = [baidu_resolve(r) for r in organic_results]
-        await asyncio.gather(*coros)
-        await session.close()
 
         tuples_list = [Link(r["link"], r["title"], username, source='Naver') for r in organic_results]
 
@@ -413,8 +363,7 @@ class MarpleResult:
         self.warnings = warnings
 
 
-async def marple(username, max_count, url_filter_enabled, is_debug=False, proxy=None,
-                 custom_engines=None):
+async def marple(username, max_count, url_filter_enabled, is_debug=False, proxy=None):
     parsers = [
         GoogleParser(),
         YandexParser(),
@@ -428,13 +377,7 @@ async def marple(username, max_count, url_filter_enabled, is_debug=False, proxy=
         TorchParser(),
         DuckduckgoParser(),
         NaverParser(),
-        BaiduParser(),
     ]
-
-    if custom_engines:
-        parsers = [
-            globals()[e.capitalize() + 'Parser']() for e in custom_engines
-        ]
 
     results = []
     errors = []
@@ -467,16 +410,8 @@ async def marple(username, max_count, url_filter_enabled, is_debug=False, proxy=
         )
 
 
-def get_engines_names():
-    names = set()
-    for k in globals().keys():
-        if k.lower().endswith('parser') and k != 'Parser':
-            names.add(k.split('Parser')[0].lower())
-    return names
-
-
 def main():
-    parser = Arguments(
+    parser = ArgumentParser(
         formatter_class=RawDescriptionHelpFormatter,
         description='Marple v0.0.1\n'
         'Collect links to profiles by username through search engines',
@@ -508,16 +443,8 @@ def main():
         help='Disable filtering results by usernames in URLs',
     )
     parser.add_argument(
-        '--engines',
-        dest='engines',
-        nargs='+',
-        choices=get_engines_names(),
-        help=f'Engines to run (you can choose more than one)',
-    )
-    parser.add_argument(
-        '--plugins',
+        '--plugin',
         dest='plugins',
-        nargs='+',
         default='',
         choices={'maigret', 'socid_extractor', 'metadata'},
         help='Additional plugins to analyze links',
@@ -566,9 +493,7 @@ def main():
 
     loop = asyncio.get_event_loop()
 
-    result = loop.run_until_complete(marple(username, args.results_count, args.url_filter,
-                                            is_debug=args.debug, proxy=args.proxy,
-                                            custom_engines=args.engines))
+    result = loop.run_until_complete(marple(username, args.results_count, args.url_filter, is_debug=args.debug, proxy=args.proxy))
 
     total_collected_count = len(result.all_links)
     uniq_count = len(result.unique_links)
@@ -577,7 +502,7 @@ def main():
         for r in result.all_links:
             print(f'{r.url}\n{r.title}\n')
 
-    if 'maigret' in args.plugins:
+    if args.plugins == 'maigret':
         try:
             import maigret
             db = maigret.MaigretDatabase().load_from_file(maigret.__path__[0]+'/resources/data.json')
@@ -587,7 +512,7 @@ def main():
             print('\tpip3 install maigret')
             exit()
 
-    if 'socid_extractor' in args.plugins:
+    if args.plugins == 'socid_extractor':
         try:
             import socid_extractor
         except ImportError:
@@ -616,13 +541,13 @@ def main():
                 message = colored(f'[{r.junk_score}]', 'magenta') + ' ' + \
                           colored(f'[{r.source}]', 'green') + ' ' + message
 
-            if 'maigret' in args.plugins and maigret.db:
+            if args.plugins == 'maigret' and maigret.db:
                 if maigret.db.extract_ids_from_url(r.url):
                     message += colored(' [v] Maigret', 'green')
                 else:
                     message += colored(' [ ] Maigret', 'yellow')
 
-            if 'socid_extractor' in args.plugins:
+            if args.plugins == 'socid_extractor':
                 try:
                     req = requests.get(r.url)
                     extract_items = socid_extractor.extract(req.text)
@@ -654,26 +579,24 @@ def main():
 
             print(f'{message}\n{r.title}')
 
-            if 'metadata' in args.plugins:
+            if args.plugins == 'metadata':
                 filename = r.url.split('/')[-1]
-                if not os.path.exists(username):
-                    os.mkdir(username)
-                else:
-                    try:
-                        if not os.path.exists(os.path.join(username, filename)):
-                            print(colored(f'Downloading {r.url} to file {filename} ...', 'cyan'))
-                            req = requests.get(r.url)
-                            with open(os.path.join(username, filename), 'wb') as f:
-                                f.write(req.content)
 
-                        with open(os.path.join(username, filename), 'rb') as f:
-                            pdf = PdfFileReader(f)
-                            info = pdf.getDocumentInfo()
-                            for k,v in info.items():
-                                print(colored(f'{k}: {v}', 'yellow'))
+                try:
+                    if not os.path.exists(filename):
+                        print(colored(f'Downloading {r.url} to file {filename}...', 'cyan'))
+                        req = requests.get(r.url)
+                        with open(filename, 'wb') as f:
+                            f.write(req.content)
 
-                    except Exception as e:
-                        print(colored(e, 'red'))
+                    with open(filename, 'rb') as f:
+                        pdf = PdfFileReader(f)
+                        info = pdf.getDocumentInfo()
+                        for k,v in info.items():
+                            print(colored(f'{k}: {v}', 'yellow'))
+
+                except Exception as e:
+                    print(colored(e, 'red'))
 
             print()
 

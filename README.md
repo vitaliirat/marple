@@ -1,8 +1,8 @@
 # Marple
 
-<p align="left">
-  <p align="left">
-    <img src="https://raw.githubusercontent.com/soxoj/marple/main/example.png" height="300"/>
+<p align="center">
+  <p align="center">
+    <img src="https://raw.githubusercontent.com/soxoj/marple/main/example.png" height="200"/>
   </p>
 </p>
 
@@ -51,13 +51,6 @@ Social OSINT fundamentals - Codeby.net
 Links: total collected 111 / unique with username in URL 97 / reliable 38 / documents 3
 ```
 
-Advanced usage:
-```
-./marple.py soxoj --plugins metadata
-
-./marple.py smirnov --engines google baidu -v
-```
-
 ## Installation
 
 All you need is Python3. And pip. And requirements, of course.
@@ -87,13 +80,8 @@ Other options:
   --results-count RESULTS_COUNT
                         Count of results parsed from each search engine
   --no-url-filter       Disable filtering results by usernames in URLs
-
-  --engines {baidu,dogpile,google,bing,ask,aol,torch,yandex,naver,paginated,yahoo,startpage,duckduckgo,qwant}
-                        Engines to run (you can choose more than one)
-
-  --plugins {socid_extractor,metadata,maigret} [{socid_extractor,metadata,maigret} ...]
+  --plugin {socid_extractor,metadata,maigret}
                         Additional plugins to analyze links
-
   -v, --verbose         Display junk score for each result
   -d, --debug           Display all the results from sources and debug messages
   -l, --list            Display only list of all the URLs
@@ -108,9 +96,7 @@ Other options:
 | [Google](http://google.com/)              | scraping                              | None, works out of the box; frequent captcha  |
 | [DuckDuckGo](https://duckduckgo.com/)     | scraping                              | None, works out of the box                    |
 | [Yandex](https://yandex.ru/)              | XML API                               | [Register and get YANDEX_USER/YANDEX_KEY tokens](https://github.com/fluquid/yandex-search)   |
-| [Naver](https://www.naver.com/)           | SerpApi                               | [Register and get SERPAPI_KEY token](https://serpapi.com/)   |
-| [Baidu](https://www.baidu.com/)           | SerpApi                               | [Register and get SERPAPI_KEY token](https://serpapi.com/)   |
-| [Aol](https://search.aol.com/)            | scraping                              | None, scrapes with pagination  |
+| [Naver](https://www.naver.com/)              | SerpApi                               | [Register and get SERPAPI_KEY token](https://serpapi.com/)   || [Aol](https://search.aol.com/)            | scraping                              | None, scrapes with pagination  |
 | [Ask](https://www.ask.com/)               | scraping                              | None, scrapes with pagination  |
 | [Bing](https://www.bing.com/)             | scraping                              | None, scrapes with pagination  |
 | [Startpage](https://www.startpage.com/)   | scraping                              | None, scrapes with pagination  |
@@ -134,7 +120,3 @@ $ python3 -m pytest tests
 - [ ] Exact search filter
 - [ ] Engine-specific filters
 - [ ] 'Username in title' check
-
-## Mentions and articles
-
-[OS2INT - MARPLE: IDENTIFYING AND EXTRACTING SOCIAL MEDIA USER LINKS](https://os2int.com/toolbox/identifying-and-extracting-social-media-user-links-with-marple/)
